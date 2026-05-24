@@ -1,13 +1,20 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-const pool = new Pool({
-  host:     process.env.DB_HOST,
-  port:     process.env.DB_PORT,
-  database: process.env.DB_NAME,
-  user:     process.env.DB_USER,
-  password: process.env.DB_PASSWORD,
-});
+const pool = new Pool(
+  process.env.DATABASE_URL
+    ? {
+        connectionString: process.env.DATABASE_URL,
+        ssl: { rejectUnauthorized: false }
+      }
+    : {
+        host:     process.env.DB_HOST,
+        port:     process.env.DB_PORT,
+        database: process.env.DB_NAME,
+        user:     process.env.DB_USER,
+        password: process.env.DB_PASSWORD,
+      }
+);
 
 pool.connect()
   .then(() => {
@@ -23,7 +30,6 @@ pool.connect()
         created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )`);
   })
-  // ─── columns ──────────────────────────────────────────────────
   .then(() => pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS submission_note TEXT DEFAULT ''`))
   .then(() => pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS submitted_at TIMESTAMP`))
   .then(() => pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS priority VARCHAR(20) DEFAULT 'Medium'`))
@@ -31,7 +37,6 @@ pool.connect()
   .then(() => pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS review_comment TEXT DEFAULT ''`))
   .then(() => pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS submission_file VARCHAR(500) DEFAULT ''`))
   .then(() => pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS submission_file_original VARCHAR(500) DEFAULT ''`))
-  // ─── approved_at: وقت موافقة القائد — يُستخدم لحساب مدة الإنجاز ───
   .then(() => pool.query(`ALTER TABLE tasks ADD COLUMN IF NOT EXISTS approved_at TIMESTAMP`))
   .then(() => console.log('✅ DB schema ready'))
   .catch(err => console.error('❌ DB Error:', err.message));
