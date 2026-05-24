@@ -84,7 +84,7 @@ const deleteProject = async (req, res) => {
 
 // @route   GET /api/projects/:id/members-score
 const getProjectMembersScore = async (req, res) => {
-  try {
+   try {
     const result = await pool.query(
       `SELECT
         u.user_id,
@@ -98,10 +98,10 @@ const getProjectMembersScore = async (req, res) => {
        JOIN users u ON ta.assigned_to = u.user_id
        JOIN tasks t ON ta.task_id = t.task_id AND t.project_id = $1
        JOIN task_statuses ts ON t.status_id = ts.status_id
-       WHERE ta.is_active = true
+       WHERE ta.is_active = true AND t.created_by = $2
        GROUP BY u.user_id, u.full_name
        ORDER BY approved DESC, avg_progress DESC`,
-      [req.params.id]
+      [req.params.id, req.user.id]
     );
 
     const members = result.rows.map((m, index) => ({
