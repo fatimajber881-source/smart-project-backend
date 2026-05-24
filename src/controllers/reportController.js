@@ -87,7 +87,7 @@ const getTeamReport = async (req, res) => {
     const result = await pool.query(
       `SELECT
          u.user_id, u.full_name AS name,
-         COUNT(DISTINCT ta.task_id) AS total_tasks,
+         COUNT(DISTINCT t.task_id) AS total_tasks,
          COUNT(DISTINCT CASE WHEN t.review_status='approved' THEN t.task_id END) AS approved,
          COUNT(DISTINCT CASE WHEN t.review_status='pending_review' THEN t.task_id END) AS pending_review,
          COUNT(DISTINCT CASE WHEN t.review_status='needs_revision' THEN t.task_id END) AS needs_revision,
@@ -101,12 +101,11 @@ const getTeamReport = async (req, res) => {
          ) AS avg_hours_per_task
        FROM users u
        JOIN roles r ON u.role_id = r.role_id
-       LEFT JOIN task_assignments ta ON u.user_id = ta.assigned_to AND ta.is_active=true
-       LEFT JOIN tasks t ON ta.task_id = t.task_id AND t.created_by = $1
+       JOIN task_assignments ta ON u.user_id = ta.assigned_to AND ta.is_active = true
+       JOIN tasks t ON ta.task_id = t.task_id AND t.created_by = $1
        LEFT JOIN task_statuses ts ON t.status_id = ts.status_id
        WHERE r.role_name = 'member'
        GROUP BY u.user_id, u.full_name
-       HAVING COUNT(DISTINCT ta.task_id) > 0
        ORDER BY approved DESC, total_tasks DESC`,
       [req.user.id]
     );
@@ -115,16 +114,16 @@ const getTeamReport = async (req, res) => {
       const total    = parseInt(m.total_tasks);
       const approved = parseInt(m.approved);
       return {
-        member_id:        m.user_id,
-        name:             m.name,
-        total_tasks:      total,
-        completed:        approved,
+        member_id:          m.user_id,
+        name:               m.name,
+        total_tasks:        total,
+        completed:          approved,
         approved,
-        pending_review:   parseInt(m.pending_review),
-        needs_revision:   parseInt(m.needs_revision),
-        in_progress:      parseInt(m.in_progress),
+        pending_review:     parseInt(m.pending_review),
+        needs_revision:     parseInt(m.needs_revision),
+        in_progress:        parseInt(m.in_progress),
         avg_hours_per_task: parseFloat(m.avg_hours_per_task),
-        performance_score: total > 0 ? `${Math.round((approved / total) * 100)}%` : '0%'
+        performance_score:  total > 0 ? `${Math.round((approved / total) * 100)}%` : '0%'
       };
     });
 
