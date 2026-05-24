@@ -88,11 +88,10 @@ const getTeamReport = async (req, res) => {
       `SELECT
          u.user_id, u.full_name AS name,
          COUNT(DISTINCT ta.task_id) AS total_tasks,
-         COUNT(DISTINCT CASE WHEN t.review_status='approved'       THEN t.task_id END) AS approved,
+         COUNT(DISTINCT CASE WHEN t.review_status='approved' THEN t.task_id END) AS approved,
          COUNT(DISTINCT CASE WHEN t.review_status='pending_review' THEN t.task_id END) AS pending_review,
          COUNT(DISTINCT CASE WHEN t.review_status='needs_revision' THEN t.task_id END) AS needs_revision,
          COUNT(DISTINCT CASE WHEN ts.status_name='in_progress' AND (t.review_status='none' OR t.review_status IS NULL) THEN t.task_id END) AS in_progress,
-         -- متوسط الساعات لإنجاز المهمة (created → approved)
          ROUND(
            COALESCE(
              AVG(CASE WHEN t.approved_at IS NOT NULL
@@ -103,11 +102,13 @@ const getTeamReport = async (req, res) => {
        FROM users u
        JOIN roles r ON u.role_id = r.role_id
        LEFT JOIN task_assignments ta ON u.user_id = ta.assigned_to AND ta.is_active=true
-       LEFT JOIN tasks t ON ta.task_id = t.task_id
+       LEFT JOIN tasks t ON ta.task_id = t.task_id AND t.created_by = $1
        LEFT JOIN task_statuses ts ON t.status_id = ts.status_id
        WHERE r.role_name = 'member'
        GROUP BY u.user_id, u.full_name
-       ORDER BY approved DESC, total_tasks DESC`
+       HAVING COUNT(DISTINCT ta.task_id) > 0
+       ORDER BY approved DESC, total_tasks DESC`,
+      [req.user.id]
     );
 
     const report = result.rows.map(m => {
