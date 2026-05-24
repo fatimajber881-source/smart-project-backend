@@ -10,15 +10,17 @@ const getTasks = async (req, res) => {
   try {
     let result;
     if (role === 'leader') {
-      result = await pool.query(
-        `SELECT t.*, ts.status_name, u.full_name AS assigned_to_name, p.project_name
-         FROM tasks t
-         JOIN task_statuses ts ON t.status_id = ts.status_id
-         LEFT JOIN task_assignments ta ON t.task_id = ta.task_id AND ta.is_active = true
-         LEFT JOIN users u ON ta.assigned_to = u.user_id
-         LEFT JOIN projects p ON t.project_id = p.project_id
-         ORDER BY CASE t.priority WHEN 'Urgent' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 WHEN 'Low' THEN 4 ELSE 5 END, t.task_id ASC`
-      );
+  result = await pool.query(
+    `SELECT t.*, ts.status_name, u.full_name AS assigned_to_name, p.project_name
+     FROM tasks t
+     JOIN task_statuses ts ON t.status_id = ts.status_id
+     LEFT JOIN task_assignments ta ON t.task_id = ta.task_id AND ta.is_active = true
+     LEFT JOIN users u ON ta.assigned_to = u.user_id
+     LEFT JOIN projects p ON t.project_id = p.project_id
+     WHERE t.created_by = $1
+     ORDER BY CASE t.priority WHEN 'Urgent' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 WHEN 'Low' THEN 4 ELSE 5 END, t.task_id ASC`,
+    [id]
+  );
     } else {
       result = await pool.query(
         `SELECT t.*, ts.status_name, p.project_name
