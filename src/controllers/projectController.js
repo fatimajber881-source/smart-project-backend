@@ -69,15 +69,39 @@ const updateProject = async (req, res) => {
 
 // @route   DELETE /api/projects/:id
 const deleteProject = async (req, res) => {
+  const { id } = req.params;
   try {
+    await pool.query('BEGIN');
+
+    // حذف كل المرتبطات بالترتيب الصح
+    const tasks = await pool.query('SELECT task_id FROM tasks WHERE project_id = $1', [id]);
+    const taskIds = tasks.rows.map(t => t.task_id);
+
+    if (taskIds.length > 0) {
+      await pool.query(`DELETE FROM time_logs WHERE task_id = ANY($1)`, [taskIds]);
+      await pool.query(`DELETE FROM notifications WHERE task_id = ANY($1)`, [taskIds]);
+      await pool.query(`DELETE FROM task_assignments WHERE task_id = ANY($1)`, [taskIds]);
+      await pool.query(`DELETE FROM task_files WHERE task_id = ANY($1)`, [taskIds]);
+      await pool.query(`DELETE FROM tasks WHERE project_id = $1`, [id]);
+    }
+
+    await pool.query(`DELETE FROM project_members WHERE project_id = $1`, [id]);
+    await pool.query(`DELETE FROM performance_snapshots WHERE project_id = $1`, [id]);
+
     const result = await pool.query(
-      'DELETE FROM projects WHERE project_id = $1 RETURNING *',
-      [req.params.id]
+      'DELETE FROM projects WHERE project_id = $1 AND leader_id = $2 RETURNING *',
+      [id, req.user.id]
     );
-    if (result.rows.length === 0)
+
+    if (result.rows.length === 0) {
+      await pool.query('ROLLBACK');
       return res.status(404).json({ message: 'Project not found' });
+    }
+
+    await pool.query('COMMIT');
     res.json({ message: 'Project deleted successfully' });
   } catch (error) {
+    await pool.query('ROLLBACK');
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
