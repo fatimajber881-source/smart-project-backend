@@ -1,49 +1,21 @@
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
 
-// تأكد إن مجلد الرفع موجود
-const uploadDir = path.join(__dirname, '../../uploads/tasks');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    const ext = path.extname(file.originalname);
-    cb(null, `task_${req.params.id}_${unique}${ext}`);
-  }
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key:    process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-const fileFilter = (req, file, cb) => {
-  // أنواع الملفات المسموح بها
-  const allowed = [
-    'image/jpeg', 'image/png', 'image/gif', 'image/webp',
-    'application/pdf',
-    'application/msword',
-    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-    'application/vnd.ms-excel',
-    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-    'application/zip',
-    'text/plain',
-    'application/javascript',
-    'text/html', 'text/css'
-  ];
-  if (allowed.includes(file.mimetype)) {
-    cb(null, true);
-  } else {
-    cb(new Error(`File type not allowed: ${file.mimetype}`), false);
-  }
-};
-
-const upload = multer({
-  storage,
-  fileFilter,
-  limits: { fileSize: 10 * 1024 * 1024 } // 10MB max per file
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: async (req, file) => ({
+    folder: 'task-submissions',
+    resource_type: 'raw',
+    public_id: `task_${req.params.id}_${Date.now()}`,
+  }),
 });
 
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 module.exports = upload;

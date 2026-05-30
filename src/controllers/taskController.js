@@ -10,17 +10,15 @@ const getTasks = async (req, res) => {
   try {
     let result;
     if (role === 'leader') {
-  result = await pool.query(
-    `SELECT t.*, ts.status_name, u.full_name AS assigned_to_name, p.project_name
-     FROM tasks t
-     JOIN task_statuses ts ON t.status_id = ts.status_id
-     LEFT JOIN task_assignments ta ON t.task_id = ta.task_id AND ta.is_active = true
-     LEFT JOIN users u ON ta.assigned_to = u.user_id
-     LEFT JOIN projects p ON t.project_id = p.project_id
-     WHERE t.created_by = $1
-     ORDER BY CASE t.priority WHEN 'Urgent' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 WHEN 'Low' THEN 4 ELSE 5 END, t.task_id ASC`,
-    [id]
-  );
+      result = await pool.query(
+        `SELECT t.*, ts.status_name, u.full_name AS assigned_to_name, p.project_name
+         FROM tasks t
+         JOIN task_statuses ts ON t.status_id = ts.status_id
+         LEFT JOIN task_assignments ta ON t.task_id = ta.task_id AND ta.is_active = true
+         LEFT JOIN users u ON ta.assigned_to = u.user_id
+         LEFT JOIN projects p ON t.project_id = p.project_id
+         ORDER BY CASE t.priority WHEN 'Urgent' THEN 1 WHEN 'High' THEN 2 WHEN 'Medium' THEN 3 WHEN 'Low' THEN 4 ELSE 5 END, t.task_id ASC`
+      );
     } else {
       result = await pool.query(
         `SELECT t.*, ts.status_name, p.project_name
@@ -98,18 +96,41 @@ const updateProgress = async (req, res) => {
   const { progress } = req.body;
   if (progress < 0 || progress > 100)
     return res.status(400).json({ message: 'Progress must be between 0 and 100' });
+
   try {
-    const check = await pool.query(`SELECT review_status FROM tasks WHERE task_id=$1`, [req.params.id]);
-    const rs = check.rows[0]?.review_status;
+    const check = await pool.query(
+      `SELECT review_status, created_at, deadline FROM tasks WHERE task_id=$1`,
+      [req.params.id]
+    );
+    const task = check.rows[0];
+    if (!task) return res.status(404).json({ message: 'Task not found' });
+
+    const rs = task.review_status;
     if (rs === 'pending_review') return res.status(400).json({ message: 'Task is awaiting leader review.' });
     if (rs === 'approved')       return res.status(400).json({ message: 'Task is already approved.' });
-    const status_id = progress === 0 ? 1 : 2;
+
+    // ── حساب الحد الأدنى التلقائي بناءً على الوقت ──
+    let autoMin = 0;
+    if (task.deadline && task.created_at) {
+      const now       = Date.now();
+      const start     = new Date(task.created_at).getTime();
+      const end       = new Date(task.deadline).getTime();
+      const totalTime = end - start;
+      if (totalTime > 0) {
+        autoMin = Math.min(99, Math.round(((now - start) / totalTime) * 100));
+      }
+    }
+
+    // ── العضو لا يقدر ينزل تحت الحد التلقائي ──
+    const finalProgress = Math.max(progress, autoMin);
+
+    const status_id = finalProgress === 0 ? 1 : 2;
     const result = await pool.query(
       `UPDATE tasks SET progress_percentage=$1, status_id=$2 WHERE task_id=$3 RETURNING *`,
-      [progress, status_id, req.params.id]
+      [finalProgress, status_id, req.params.id]
     );
-    if (result.rows.length === 0) return res.status(404).json({ message: 'Task not found' });
-    res.json(result.rows[0]);
+
+    res.json({ ...result.rows[0], auto_min: autoMin });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }

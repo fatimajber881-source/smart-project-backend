@@ -69,46 +69,22 @@ const updateProject = async (req, res) => {
 
 // @route   DELETE /api/projects/:id
 const deleteProject = async (req, res) => {
-  const { id } = req.params;
   try {
-    await pool.query('BEGIN');
-
-    // حذف كل المرتبطات بالترتيب الصح
-    const tasks = await pool.query('SELECT task_id FROM tasks WHERE project_id = $1', [id]);
-    const taskIds = tasks.rows.map(t => t.task_id);
-
-    if (taskIds.length > 0) {
-      await pool.query(`DELETE FROM time_logs WHERE task_id = ANY($1)`, [taskIds]);
-      await pool.query(`DELETE FROM notifications WHERE task_id = ANY($1)`, [taskIds]);
-      await pool.query(`DELETE FROM task_assignments WHERE task_id = ANY($1)`, [taskIds]);
-      await pool.query(`DELETE FROM task_files WHERE task_id = ANY($1)`, [taskIds]);
-      await pool.query(`DELETE FROM tasks WHERE project_id = $1`, [id]);
-    }
-
-    await pool.query(`DELETE FROM project_members WHERE project_id = $1`, [id]);
-    await pool.query(`DELETE FROM performance_snapshots WHERE project_id = $1`, [id]);
-
     const result = await pool.query(
-      'DELETE FROM projects WHERE project_id = $1 AND leader_id = $2 RETURNING *',
-      [id, req.user.id]
+      'DELETE FROM projects WHERE project_id = $1 RETURNING *',
+      [req.params.id]
     );
-
-    if (result.rows.length === 0) {
-      await pool.query('ROLLBACK');
+    if (result.rows.length === 0)
       return res.status(404).json({ message: 'Project not found' });
-    }
-
-    await pool.query('COMMIT');
     res.json({ message: 'Project deleted successfully' });
   } catch (error) {
-    await pool.query('ROLLBACK');
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
 // @route   GET /api/projects/:id/members-score
 const getProjectMembersScore = async (req, res) => {
-   try {
+  try {
     const result = await pool.query(
       `SELECT
         u.user_id,
@@ -122,10 +98,10 @@ const getProjectMembersScore = async (req, res) => {
        JOIN users u ON ta.assigned_to = u.user_id
        JOIN tasks t ON ta.task_id = t.task_id AND t.project_id = $1
        JOIN task_statuses ts ON t.status_id = ts.status_id
-       WHERE ta.is_active = true AND t.created_by = $2
+       WHERE ta.is_active = true
        GROUP BY u.user_id, u.full_name
        ORDER BY approved DESC, avg_progress DESC`,
-      [req.params.id, req.user.id]
+      [req.params.id]
     );
 
     const members = result.rows.map((m, index) => ({
