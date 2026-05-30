@@ -15,8 +15,8 @@ const app = express();
 
 app.use(cors({
   origin: [
-    'http://localhost:3000',
-    'https://smart-project-frontend1-seven.vercel.app'
+    'https://smart-project-frontend.vercel.app',
+    'http://localhost:3000'
   ],
   credentials: true
 }));
